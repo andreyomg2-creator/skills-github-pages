@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek Crystal Edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root { 
+            --deepseek-blue: #4d6bfe; 
+            --bg: #ffffff; 
+            --text: #1a1a1a;
+            --ai-msg: #f4f4f7;
+            --border: #e5e5e5;
+        }
+        
+        body { 
+            background: var(--bg); color: var(--text); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            display: flex; justify-content: center; height: 100vh; margin: 0; 
+        }
+
+        .card { 
+            width: 100%; max-width: 800px; display: flex; flex-direction: column; 
+            background: #fff; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+        }
+
+        header {
+            padding: 15px 25px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        .logo { color: var(--deepseek-blue); font-weight: bold; font-size: 1.2rem; }
+
+        #box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+
+        .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 15px; line-height: 1.6; }
+        
+        .user { align-self: flex-end; background: var(--deepseek-blue); color: white; }
+        
+        .ai { align-self: flex-start; background: var(--ai-msg); color: var(--text); border: 1px solid var(--border); }
+
+        .input-container { padding: 20px; border-top: 1px solid var(--border); position: relative; }
+
+        .input-wrapper {
+            display: flex; align-items: center; background: #fff;
+            border: 1.5px solid var(--border); border-radius: 12px; padding: 5px 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05); transition: 0.3s;
+        }
+
+        .input-wrapper:focus-within { border-color: var(--deepseek-blue); }
+
+        input { 
+            flex: 1; border: none; padding: 12px; outline: none; font-size: 15px; background: transparent;
+        }
+
+        button { 
+            background: var(--deepseek-blue); color: white; border: none; 
+            width: 35px; height: 35px; border-radius: 8px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-weight: bold;
+        }
+
+        .thinking { font-size: 13px; color: #888; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+        
+        pre { background: #2d2d2d; color: #ccc; padding: 10px; border-radius: 8px; overflow-x: auto; }
+        code { font-family: 'Consolas', monospace; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <header>
+        <div class="logo">DeepSeek</div>
+        <div style="font-size: 0.8rem; color: #888;">Crystal R1-Lite</div>
+    </header>
+
+    <div id="box">
+        <div class="msg ai">Здравствуйте! Я DeepSeek Crystal. Чем я могу помочь вам сегодня?</div>
+    </div>
+
+    <div class="input-container">
+        <div class="input-wrapper">
+            <input type="text" id="ui" placeholder="Спросите DeepSeek..." autocomplete="off">
+            <button id="sendBtn">↑</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const box = document.getElementById('box');
+    const ui = document.getElementById('ui');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // Используем модель DeepSeek-V3 или R1 через Hugging Face (бесплатный инстанс)
+    async function askDeepSeek(question) {
+        // Мы используем мощную модель DeepSeek-R1-Distill-Qwen-32B
+        const response = await fetch("https://api-inference.huggingface.co/models/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                inputs: `<|User|>${question}<|Assistant|>`,
+                parameters: { max_new_tokens: 2000, temperature: 0.6 }
+            })
+        });
+
+        if (!response.ok) throw new Error("Модель загружается или перегружена");
+        
+        const data = await response.json();
+        let text = data[0].generated_text;
+        
+        // Очистка от промпта
+        return text.split('<|Assistant|>').pop().trim();
+    }
+
+    async function handleSend() {
+        const text = ui.value.trim();
+        if (!text) return;
+
+        addMsg(text, 'user');
+        ui.value = '';
+        
+        const aiMsgDiv = addMsg('<div class="thinking">DeepSeek думает...</div>', 'ai');
+
+        try {
+            const answer = await askDeepSeek(text);
+            // Удаляем теги рассуждений <think>, если они есть в ответе
+            const cleanAnswer = answer.replace(/<think>[\s\S]*?<\/think>/g, '');
+            aiMsgDiv.innerHTML = marked.parse(cleanAnswer);
+        } catch (e) {
+            aiMsgDiv.innerHTML = `<span style="color: #ff4d4f;">Ошибка: ${e.message}. Пожалуйста, попробуйте еще раз.</span>`;
+        }
+        
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function addMsg(text, className) {
+        const div = document.createElement('div');
+        div.className = `msg ${className}`;
+        div.innerHTML = text; // Используем innerHTML для обработки thinking
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+        return div;
+    }
+
+    sendBtn.onclick = handleSend;
+    ui.onkeypress = (e) => { if(e.key === 'Enter') handleSend() };
+</script>
+</body>
+</html>
